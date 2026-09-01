@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecureMailScope — {{ r.capture.filename }}</title>
+<style>
+  :root{
+    --paper:#ECEEF0; --surface:#FBFCFC; --surface-2:#F3F5F6; --surface-3:#E4E8EA;
+    --ink:#0E1719; --ink-2:#47585D; --ink-3:#71838A; --line:#D2D8DA; --line-2:#BCC5C8;
+    --accent:#005E6B; --accent-soft:#DCEAEC;
+    --crit:#A82018; --crit-soft:#F6E2E0; --high:#9A5A00; --high-soft:#F7EBD8;
+    --med:#7A5C00; --med-soft:#F6F0DC; --ok:#186047; --ok-soft:#DEEDE6;
+    --info:#25467F; --info-soft:#E1E7F3;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#0C1315; --surface:#141F22; --surface-2:#18262A; --surface-3:#223338;
+      --ink:#E3EAEB; --ink-2:#9FB2B7; --ink-3:#7B8F95; --line:#28393E; --line-2:#384E54;
+      --accent:#4FC4D2; --accent-soft:#12333A;
+      --crit:#F08279; --crit-soft:#33191A; --high:#E3A653; --high-soft:#312414;
+      --med:#D7C169; --med-soft:#2C2814; --ok:#63C9A2; --ok-soft:#122E26;
+      --info:#8AAAE5; --info-soft:#17233B;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+       font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}
+  .wrap{max-width:1100px;margin:0 auto;padding:32px 24px 80px;}
+  header{border-bottom:2px solid var(--ink);padding-bottom:24px;margin-bottom:8px;}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+           color:var(--accent);margin-bottom:10px;}
+  h1{font-size:30px;margin:0 0 6px;letter-spacing:-.02em;}
+  h2{font-size:20px;margin:44px 0 14px;padding-top:18px;border-top:1px solid var(--line);letter-spacing:-.01em;}
+  h3{font-size:15px;margin:24px 0 8px;}
+  .sub{color:var(--ink-2);font-family:var(--mono);font-size:12px;word-break:break-all;}
+  .hero{display:flex;gap:26px;align-items:center;flex-wrap:wrap;margin:26px 0;}
+  .stamp{width:96px;height:96px;border-radius:6px;display:flex;align-items:center;justify-content:center;
+         font-size:44px;font-weight:700;color:#fff;letter-spacing:-.02em;flex:none;}
+  .g-A,.g-Aplus{background:var(--ok)} .g-B{background:#2E7D5B} .g-C{background:var(--high)}
+  .g-D{background:#8A4A10} .g-E{background:#94301F} .g-F{background:var(--crit)}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;flex:1;min-width:280px;}
+  .kpi{background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:12px 14px;}
+  .kpi b{display:block;font-size:24px;line-height:1.1;font-variant-numeric:tabular-nums;}
+  .kpi span{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);}
+  table{border-collapse:collapse;width:100%;font-size:13.5px;}
+  .tw{overflow-x:auto;border:1px solid var(--line);border-radius:5px;background:var(--surface);margin:14px 0;}
+  th{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;text-align:left;
+     color:var(--ink-3);padding:10px 13px;background:var(--surface-2);border-bottom:1px solid var(--line-2);white-space:nowrap;}
+  td{padding:9px 13px;border-bottom:1px solid var(--line);vertical-align:top;}
+  tbody tr:last-child td{border-bottom:none}
+  .mono{font-family:var(--mono);font-size:12px;}
+  .pill{display:inline-block;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.05em;
+        padding:2px 7px;border-radius:3px;text-transform:uppercase;white-space:nowrap;}
+  .s-critical{background:var(--crit-soft);color:var(--crit)}
+  .s-high{background:var(--high-soft);color:var(--high)}
+  .s-medium{background:var(--med-soft);color:var(--med)}
+  .s-low{background:var(--surface-3);color:var(--ink-2)}
+  .s-info{background:var(--info-soft);color:var(--info)}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:18px 20px;margin:12px 0;}
+  .finding{border-left:3px solid var(--line-2);padding:10px 0 10px 14px;margin:12px 0;}
+  .finding.critical{border-left-color:var(--crit)} .finding.high{border-left-color:var(--high)}
+  .finding.medium{border-left-color:var(--med)} .finding.low{border-left-color:var(--line-2)}
+  .finding.info{border-left-color:var(--info)}
+  .finding .ft{font-weight:600;}
+  .finding .fm{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-top:3px;}
+  .finding .fd{color:var(--ink-2);font-size:14px;margin-top:5px;}
+  .finding .fr{font-size:13.5px;margin-top:6px;padding:8px 11px;background:var(--surface-2);
+               border-radius:4px;border:1px solid var(--line);}
+  pre{font-family:var(--mono);font-size:11.5px;line-height:1.55;background:var(--surface-2);
+      border:1px solid var(--line);border-radius:5px;padding:14px 16px;overflow-x:auto;white-space:pre;}
+  .note{border:1px solid var(--line);border-left:3px solid var(--high);background:var(--high-soft);
+        padding:12px 16px;border-radius:0 4px 4px 0;margin:14px 0;font-size:14px;}
+  .shap{display:flex;align-items:center;gap:8px;margin:3px 0;font-family:var(--mono);font-size:11.5px;}
+  .shap .bar{height:9px;border-radius:2px;}
+  .shap .pos{background:var(--crit)} .shap .neg{background:var(--ok)}
+  .shap .nm{min-width:170px;color:var(--ink-2)}
+  .muted{color:var(--ink-3);font-size:13px;}
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--line);
+         font-family:var(--mono);font-size:11px;color:var(--ink-3);line-height:1.7;}
+  @media print{
+    body{background:#fff;color:#000}
+    .wrap{max-width:none;padding:0}
+    h2{page-break-after:avoid} .card,.finding{page-break-inside:avoid}
+    @page{margin:16mm;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">SecureMailScope · Forensic Report · PS 26159</div>
+  <h1>Cryptographic posture assessment</h1>
+  <div class="sub">
+    {{ r.capture.filename }} · {{ r.capture.format }} · {{ '{:,}'.format(r.capture.bytes) }} bytes ·
+    {{ r.capture.packet_count }} packets<br>
+    SHA-256 {{ r.capture.sha256 }}<br>
+    Captured {{ r.capture.first_packet_time or 'unknown' }} · Report generated {{ r.generated_at }}
+  </div>
+</header>
+
+<div class="hero">
+  <div class="stamp g-{{ 'Aplus' if r.overall_grade == 'A+' else r.overall_grade }}">{{ r.overall_grade }}</div>
+  <div class="kpis">
+    <div class="kpi"><b>{{ r.counts.sessions }}</b><span>Sessions</span></div>
+    <div class="kpi"><b>{{ r.counts.assets }}</b><span>Servers</span></div>
+    <div class="kpi"><b>{{ r.counts.critical }}</b><span>Critical</span></div>
+    <div class="kpi"><b>{{ r.counts.high }}</b><span>High</span></div>
+    <div class="kpi"><b>{{ r.counts.credentials_exposed }}</b><span>Creds exposed</span></div>
+  </div>
+</div>
+
+{% if r.warnings %}
+{% for w in r.warnings %}<div class="note"><b>Capture note.</b> {{ w }}</div>{% endfor %}
+{% endif %}
+
+<h2>1 · Servers, worst first</h2>
+<div class="tw"><table>
+  <thead><tr>
+    <th>Server</th><th>Proto</th><th>Role</th><th>Grade</th><th class="mono">Raw</th>
+    <th>TLS seen</th><th>Sessions</th><th>Exposure</th><th>Capped by</th>
+  </tr></thead>
+  <tbody>
+  {% for a in r.assets %}
+    <tr>
+      <td class="mono">{{ a.host }}:{{ a.port }}</td>
+      <td>{{ a.protocol }}</td>
+      <td class="mono">{{ a.role }}</td>
+      <td><span class="pill s-{{ 'critical' if a.grade.letter in ['F','E'] else 'high' if a.grade.letter in ['D','C'] else 'info' }}">{{ a.grade.letter }}</span>
+          {% if not a.grade.trusted %}<span class="pill s-low">untrusted</span>{% endif %}</td>
+      <td class="mono">{{ a.grade.raw_score }}</td>
+      <td class="mono">{% if a.best_tls %}{{ a.worst_tls }}{% if a.version_spread %} → {{ a.best_tls }}{% endif %}{% else %}—{% endif %}</td>
+      <td class="mono">{{ a.session_count }}</td>
+      <td class="mono">{{ a.exposure_score }}</td>
+      <td class="mono">{{ a.grade.capped_by or '—' }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+
+<h2>2 · Prioritised remediation</h2>
+{% if r.remediation %}
+<div class="tw"><table>
+  <thead><tr><th>#</th><th>Severity</th><th>Rule</th><th>Action</th><th>Servers</th></tr></thead>
+  <tbody>
+  {% for m in r.remediation %}
+    <tr>
+      <td class="mono">{{ m.order }}</td>
+      <td><span class="pill s-{{ m.severity }}">{{ m.severity }}</span></td>
+      <td class="mono">{{ m.rule_id }}<br><span class="muted">{{ m.standard }}</span></td>
+      <td>{{ m.title }}<br><span class="muted">{{ m.action }}</span></td>
+      <td class="mono">{{ m.affected_assets|join(', ') }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% else %}<p class="muted">No actionable findings.</p>{% endif %}
+
+<h2>3 · Session detail</h2>
+{% for s in r.sessions %}
+<div class="card">
+  <h3>Session #{{ s.tcp_stream }} · {{ s.protocol|upper }} over {{ s.tls_mode }}
+      <span class="pill s-{{ 'critical' if s.grade.letter in ['F','E'] else 'high' if s.grade.letter in ['D','C'] else 'info' }}">{{ s.grade.letter }}</span></h3>
+  <div class="sub">
+    {{ s.client.ip }}:{{ s.client.port }} → {{ s.server.ip }}:{{ s.server.port }}
+    · frames {{ s.first_frame }}–{{ s.last_frame }} · {{ s.duration_seconds }}s
+    · role {{ s.role }} · confidence {{ s.confidence }}
+  </div>
+
+  <div class="tw"><table>
+    <thead><tr><th colspan="2">TLS handshake</th><th colspan="2">X.509 certificate</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="mono">Version</td><td class="mono">{{ s.tls_version or 'none — cleartext' }}</td>
+        <td class="mono">Visibility</td><td class="mono">{{ s.cert_visibility }}</td>
+      </tr>
+      <tr>
+        <td class="mono">Cipher</td><td class="mono">{{ s.cipher_suite or '—' }}</td>
+        <td class="mono">Subject</td>
+        <td class="mono">{{ s.chain[0].subject if s.chain else '—' }}</td>
+      </tr>
+      <tr>
+        <td class="mono">Key exchange</td>
+        <td class="mono">{{ s.kex or '—' }}{% if s.kex_bits %} · {{ s.kex_bits }}-bit equiv{% endif %}</td>
+        <td class="mono">Issuer</td>
+        <td class="mono">{{ s.chain[0].issuer if s.chain else '—' }}</td>
+      </tr>
+      <tr>
+        <td class="mono">Forward secrecy</td>
+        <td class="mono">{{ 'yes' if s.forward_secrecy else 'no' if s.forward_secrecy is not none else '—' }}</td>
+        <td class="mono">Valid until</td>
+        <td class="mono">{% if s.chain %}{{ s.chain[0].not_after }}
+            {% if s.chain[0].expired_at_capture %}<span class="pill s-critical">expired at capture</span>
+            {% else %}<span class="pill s-info">valid at capture</span>{% endif %}{% else %}—{% endif %}</td>
+      </tr>
+      <tr>
+        <td class="mono">JA4 / JA3</td>
+        <td class="mono">{{ s.ja4 or '—' }}<br>{{ s.ja3 or '' }}</td>
+        <td class="mono">Key / signature</td>
+        <td class="mono">{% if s.chain %}{{ s.chain[0].key_algorithm }} {{ s.chain[0].key_bits }} · {{ s.chain[0].signature_hash }}{% else %}—{% endif %}</td>
+      </tr>
+      <tr>
+        <td class="mono">STARTTLS</td>
+        <td class="mono">offered {{ s.starttls_offered }} · requested {{ s.starttls_requested }} · completed {{ s.starttls_accepted }}</td>
+        <td class="mono">Chain / revocation</td>
+        <td class="mono">{{ s.chain_valid if s.chain_valid is not none else 'not evaluated' }} · {{ s.revocation }}</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <div class="mono muted">
+    Grade {{ s.grade.letter }} — weighted {{ s.grade.raw_score }}
+    (protocol {{ '%.0f'|format(s.grade.components.protocol) }} ·
+     key exchange {{ '%.0f'|format(s.grade.components.key_exchange) }} ·
+     cipher {{ '%.0f'|format(s.grade.components.cipher) }})
+    {%- if s.grade.capped_by %}, capped to {{ s.grade.letter }} by {{ s.grade.capped_by }}{% endif %}
+    {%- if s.grade.zero_category %}; zero in {{ s.grade.zero_category }} forces the score to 0{% endif %}.
+  </div>
+
+  {% if s.capability_mangled %}
+  <div class="note">
+    <b>Downgrade evidence.</b> The capability list contains
+    <code class="mono">{{ s.mangled_token }}</code> where the STARTTLS keyword belongs — the same
+    equal-length substitution measured in the wild by Durumeric et al., IMC 2015.
+  </div>
+  {% endif %}
+
+  {% if s.cleartext_auth %}
+  <div class="note">
+    <b>Credentials exposed.</b> {{ s.cleartext_auth.mechanism }} authentication for
+    <code class="mono">{{ s.cleartext_auth.username or 'unknown user' }}</code> was sent before any
+    encryption existed (frame {{ s.cleartext_auth.frame }}). The secret itself is not stored in this
+    report; SHA-256 <code class="mono">{{ s.cleartext_auth.secret_sha256[:24] }}…</code> is retained
+    so reuse can be correlated. Treat this credential as compromised.
+  </div>
+  {% endif %}
+
+  {% for f in s.findings %}
+  <div class="finding {{ f.severity }}">
+    <div class="ft"><span class="pill s-{{ f.severity }}">{{ f.severity }}</span> {{ f.rule_id }} — {{ f.title }}</div>
+    <div class="fm">{{ f.standard }} · frames {{ f.evidence.frames|join(', ') }} · stream {{ f.evidence.tcp_stream }}</div>
+    {% if f.detail %}<div class="fd">{{ f.detail }}</div>{% endif %}
+    <div class="fr"><b>Fix:</b> {{ f.remediation }}</div>
+  </div>
+  {% endfor %}
+
+  {% if s.ml %}
+  <h3>Model assessment</h3>
+  <div class="mono muted">
+    posture {{ s.ml.risk_class }} · P(critical) {{ s.ml.risk_score }} ·
+    anomaly {{ 'yes' if s.ml.anomaly else 'no' }}
+    {%- if s.ml.anomaly_score is not none %} ({{ s.ml.anomaly_score }}){% endif %}
+    · model {{ s.ml.model_version }}
+  </div>
+  <p class="fd">{{ s.ml.explanation }}</p>
+  {% if s.ml.shap %}
+  <div>
+    {% for c in s.ml.shap[:8] %}
+    <div class="shap">
+      <span class="nm">{{ c.feature }} = {{ c.value }}</span>
+      <span class="bar {{ 'pos' if c.contribution > 0 else 'neg' }}"
+            style="width:{{ (c.contribution|abs * 260)|round|int if (c.contribution|abs * 260) < 260 else 260 }}px"></span>
+      <span>{{ '%+.4f'|format(c.contribution) }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  <p class="muted">TreeSHAP contributions toward the predicted class. Positive values push the
+     session toward that verdict; negative values pull away from it.</p>
+  {% endif %}
+  {% endif %}
+
+  {% if s.command_transcript %}
+  <h3>Reconstructed transcript (cleartext phase)</h3>
+  <pre>{% for line in s.command_transcript[:24] %}{{ line }}
+{% endfor %}</pre>
+  {% endif %}
+
+  {% if s.notes %}<p class="muted">{% for n in s.notes %}{{ n }} {% endfor %}</p>{% endif %}
+</div>
+{% endfor %}
+
+<h2>4 · Scope and limitations</h2>
+<div class="card">
+  <ul>
+    <li><b>Passive analysis only.</b> No packet was ever transmitted and no server was contacted.
+        Every statement above derives from the capture file whose SHA-256 is printed on page one.</li>
+    <li><b>Grades are scoped to observed sessions.</b> An active scanner probes every option a
+        server supports; a passive tool sees only what was actually negotiated. Server-level grades
+        combine the best and worst observation, following the published Qualys methodology, but they
+        do not describe the server's full capability surface.</li>
+    <li><b>Certificate validity is judged against the capture clock</b>, not today's date — so a
+        certificate that was valid when recorded is not reported as expired.</li>
+    <li><b>TLS 1.3 encrypts the Certificate message</b> (RFC 8446 §4.4). Sessions marked
+        <span class="mono">encrypted_tls13</span> carry no certificate findings; that is a property
+        of the protocol, not an omission.</li>
+    <li><b>Revocation</b> is only checked where the server stapled an OCSP response. Offline there is
+        no responder to query, and unchecked is reported as <span class="mono">unknown_offline</span>
+        rather than assumed good.</li>
+    <li><b>The model never decides a verdict.</b> All findings above come from the deterministic rule
+        engine. Model output is advisory: prioritisation and anomaly surfacing.</li>
+  </ul>
+</div>
+
+<footer>
+  SecureMailScope {{ r.tool_version }} · schema {{ r.schema_version }} · Smart India Hackathon 2026 ·
+  Problem Statement 26159 · NTRO<br>
+  Evidence hash SHA-256 {{ r.capture.sha256 }}
+</footer>
+
+</div>
+
+<script>
+/*
+ * "Save as PDF" opens this report with ?print=1 and the browser does the
+ * rendering. That is the whole PDF feature.
+ *
+ * It used to be a server-side render through WeasyPrint, which needs Pango and
+ * cairo — native libraries that install cleanly in a Debian container and often
+ * not at all on a Mac. So the endpoint returned 501 everywhere it was actually
+ * used, behind a <a download> link that discards error bodies, and the button
+ * failed with "this site can't be reached" and no explanation. Printing the
+ * page uses the @page rules already in this stylesheet, produces the same
+ * document, needs nothing installed, and behaves identically in every
+ * deployment.
+ *
+ * Gated on the query string so a saved copy of this file never prints itself
+ * when someone opens it.
+ */
+(function () {
+  try {
+    if (new URLSearchParams(window.location.search).get('print') === '1') {
+      window.addEventListener('load', function () { window.print(); });
+    }
+  } catch (e) {
+    /* Older browser without URLSearchParams: the reader can still press Ctrl-P. */
+  }
+})();
+</script>
+</body>
+</html>

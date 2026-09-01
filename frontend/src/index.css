@@ -1,0 +1,120 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Design tokens.
+ *
+ * Two themes, both authored — dark is a selected set of steps, not an inversion
+ * of light. The severity colours are a reserved *status* palette: they are never
+ * used for anything else, and they never appear without a text label beside
+ * them, so meaning never rests on colour alone.
+ *
+ * --shap-pos / --shap-neg are the diverging pair for the model-attribution
+ * chart. They were chosen by running the palette validator rather than by eye:
+ * both modes pass the lightness band, chroma floor, CVD separation
+ * (ΔE 23 protan), normal-vision floor and 3:1 contrast checks.
+ */
+:root {
+  --paper: #eceef0;
+  --surface: #fbfcfc;
+  --surface-2: #f3f5f6;
+  --surface-3: #e4e8ea;
+  --ink: #0e1719;
+  --ink-2: #47585d;
+  --ink-3: #71838a;
+  --line: #d2d8da;
+  --line-2: #bcc5c8;
+  --accent: #005e6b;
+  --accent-soft: #dceaec;
+
+  --crit: #a82018;
+  --crit-soft: #f6e2e0;
+  --high: #9a5a00;
+  --high-soft: #f7ebd8;
+  --med: #7a6a12;
+  --med-soft: #f4f1dc;
+  --ok: #186047;
+  --ok-soft: #deede6;
+  --info: #25467f;
+  --info-soft: #e1e7f3;
+
+  --shap-pos: #b3540a;
+  --shap-neg: #1268b3;
+
+  color-scheme: light;
+}
+
+.dark {
+  --paper: #0c1315;
+  --surface: #141f22;
+  --surface-2: #18262a;
+  --surface-3: #223338;
+  --ink: #e3eaeb;
+  --ink-2: #9fb2b7;
+  --ink-3: #7b8f95;
+  --line: #28393e;
+  --line-2: #384e54;
+  --accent: #4fc4d2;
+  --accent-soft: #12333a;
+
+  --crit: #f08279;
+  --crit-soft: #33191a;
+  --high: #e3a653;
+  --high-soft: #312414;
+  --med: #d7c169;
+  --med-soft: #2c2814;
+  --ok: #63c9a2;
+  --ok-soft: #122e26;
+  --info: #8aaae5;
+  --info-soft: #17233b;
+
+  --shap-pos: #c67b32;
+  --shap-neg: #4e93db;
+
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Focus is always visible — the dashboard is operated as much by keyboard as
+   by mouse in a SOC. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Scrollbars that do not fight the theme */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--surface-2);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line-2);
+  border-radius: 5px;
+}
