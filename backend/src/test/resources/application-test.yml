@@ -29,3 +29,6 @@ logging:
   level:
     org.springframework.web: WARN
     in.gov.ntro.sih.sms: INFO
+
+# Tests explicitly drive the worker so queued-state assertions are deterministic.
+sms.jobs.enabled: false

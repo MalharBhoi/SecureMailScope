@@ -33,11 +33,18 @@ from .report import html_report, json_report
 
 
 def cmd_analyse(args: argparse.Namespace) -> int:
+    if sys.platform.startswith('linux'):
+        import resource
+        limit = int(os.environ.get('SMS_MAX_MEMORY_MB', '4096')) * 1024 * 1024
+        resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
     if not os.path.exists(args.pcap):
         print(f"error: no such file: {args.pcap}", file=sys.stderr)
         return 2
 
-    report = analyse_capture(args.pcap, run_ml=not args.no_ml, model_path=args.model)
+    history = json.loads(_read_text(args.history)) if args.history else []
+    def progress(stage):
+        print("SMS_PROGRESS:" + stage, file=sys.stderr, flush=True)
+    report = analyse_capture(args.pcap, run_ml=not args.no_ml, model_path=args.model, progress=progress, history=history)
     payload = json_report.dumps(report, indent=None if args.compact else 2)
 
     if args.json == "-":
@@ -129,6 +136,8 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--html", metavar="PATH", default="-",
                    help="where to write the HTML; '-' (the default) is stdout")
     d.set_defaults(func=cmd_render)
+
+    a.add_argument("--history", help="JSON array of earlier investigation reports")
 
     t = sub.add_parser("train", help="train the posture model")
     t.add_argument("--profiles", type=int, default=260)

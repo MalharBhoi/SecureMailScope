@@ -260,3 +260,23 @@ def test_unknown_suite_does_not_crash():
     p = properties(0xDEAD)
     assert "UNKNOWN" in p.name
     assert p.recommended is False
+
+
+@pytest.mark.parametrize('hostname,expected', [
+    (b'example.com', 'example.com'),
+    (b'xn--bcher-kva.example', 'bücher.example'),
+    (b'\xff.invalid', None),
+])
+def test_sni_decoding_preserves_client_hello(hostname, expected):
+    import struct
+    name = b'\x00' + struct.pack('!H', len(hostname)) + hostname
+    sni = struct.pack('!H', len(name)) + name
+    extensions = struct.pack('!HH', 0, len(sni)) + sni
+    versions = b'\x02\x03\x04'
+    extensions += struct.pack('!HH', 43, len(versions)) + versions
+    body = (b'\x03\x03' + bytes(32) + b'\x00' + b'\x00\x02\x13\x02'
+            + b'\x01\x00' + struct.pack('!H', len(extensions)) + extensions)
+    hello = tls.parse_client_hello(body)
+    assert hello is not None
+    assert hello.server_name == expected
+    assert hello.supported_versions == [0x0304]

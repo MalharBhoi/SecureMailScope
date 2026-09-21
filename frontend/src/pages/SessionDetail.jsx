@@ -12,6 +12,7 @@ import {
   ShapChart,
   Spinner,
 } from '../components/ui'
+import { Coverage } from '../components/Assessment'
 import { useReport } from '../App'
 import { adaptBackendCapture, getCapture } from '../lib/api'
 import { dateOnly, sessionKind, titleCase, yesNo } from '../lib/format'
@@ -108,6 +109,7 @@ export default function SessionDetail() {
         </div>
       </div>
 
+      <Coverage coverage={s.coverage} />
       {/* -------------------------------------------------- score explanation */}
       <Card className="px-4 py-3 mb-5">
         <div className="font-mono text-[12px] text-ink-2 leading-relaxed">

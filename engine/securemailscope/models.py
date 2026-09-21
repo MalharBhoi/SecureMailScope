@@ -279,6 +279,8 @@ class Session:
     confidence: Confidence = Confidence.FULL
     notes: list[str] = field(default_factory=list)
 
+    coverage: dict[str, Any] = field(default_factory=dict)
+
     # ---- convenience ------------------------------------------------------
     @property
     def encrypted(self) -> bool:
@@ -340,8 +342,11 @@ class CaptureInfo:
 
 @dataclass
 class Report:
+    provenance: dict[str, Any] = field(default_factory=dict)
+    coverage: dict[str, Any] = field(default_factory=dict)
+    history: dict[str, Any] = field(default_factory=dict)
     schema_version: str = SCHEMA_VERSION
-    tool_version: str = "1.0.0"
+    tool_version: str = "1.1.0"
     generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     capture: Optional[CaptureInfo] = None
     sessions: list[Session] = field(default_factory=list)

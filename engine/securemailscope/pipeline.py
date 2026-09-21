@@ -13,7 +13,9 @@ from __future__ import annotations
 import hashlib
 import os
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Callable
+from .assessment import coverage, provenance
+from .history import annotate_history
 
 from .analyze import certs as certmod
 from .analyze import dnspolicy, starttls, tls
@@ -53,7 +55,11 @@ def analyse_capture(
     path: str,
     run_ml: bool = True,
     model_path: Optional[str] = None,
+    progress: Optional[Callable[[str], None]] = None,
+    history: Optional[list] = None,
 ) -> Report:
+    emit = progress or (lambda stage: None)
+    emit("READING")
     reader = CaptureReader(path)
     meta = reader.meta
 
@@ -85,8 +91,10 @@ def analyse_capture(
         )
 
     policy = dnspolicy.collect(reader.udp_datagrams())
+    emit("REASSEMBLING")
     streams = reassemble(reader.tcp_segments())
 
+    emit("TLS_AND_CERTIFICATES")
     sessions: list[Session] = []
     for st in streams:
         session = _build_session(st, reader, capture.sha256, policy)
@@ -94,6 +102,7 @@ def analyse_capture(
             continue
         sessions.append(session)
 
+    emit("RULES_AND_COVERAGE")
     # --- deterministic scoring ------------------------------------------
     for s in sessions:
         s.features = extract_features(s)
@@ -101,6 +110,7 @@ def analyse_capture(
         s.grade = grade_session(s, s.findings)
 
     # --- ML layer (optional, never decides a verdict) --------------------
+    emit("ML_ASSESSMENT")
     if run_ml and sessions:
         try:
             from .ml.predict import annotate
@@ -115,6 +125,7 @@ def analyse_capture(
         except Exception as exc:  # advisory only; never fail the analysis
             warnings.append(f"Model stage skipped — {exc}")
 
+    emit("AGGREGATING")
     assets = build_assets(sessions)
     letter, score = overall(assets)
 
@@ -131,7 +142,11 @@ def analyse_capture(
         "anomalies": sum(1 for s in sessions if s.ml and s.ml.anomaly),
     }
 
-    return Report(
+    report = Report(
+        provenance=provenance(model_path),
+        coverage={"sessions": len(sessions), "limited_sessions": sum(s.coverage["label"] == "limited" for s in sessions),
+                  "assessed_checks": sum(s.coverage["assessed_checks"] for s in sessions),
+                  "applicable_checks": sum(s.coverage["applicable_checks"] for s in sessions)},
         capture=capture,
         sessions=sessions,
         assets=assets,
@@ -142,6 +157,11 @@ def analyse_capture(
         warnings=warnings,
     )
 
+    emit("HISTORY_COMPARISON")
+    report.history = annotate_history(report, history or [])
+    report.provenance["ml_enabled"] = run_ml
+    report.provenance["ml_applied"] = any(s.ml for s in sessions)
+    return report
 
 # --------------------------------------------------------------------------
 
@@ -275,4 +295,5 @@ def _build_session(
         session.notes.append("Reassembled stream contains gaps; some bytes were not captured.")
         session.confidence = Confidence.PARTIAL
 
+    session.coverage = coverage(session, len(st.client_to_server.gaps) + len(st.server_to_client.gaps), reader.meta.truncated_packets > 0)
     return session

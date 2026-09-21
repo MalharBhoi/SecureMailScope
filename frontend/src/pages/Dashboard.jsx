@@ -12,8 +12,9 @@ import {
   Spinner,
   StatTile,
 } from '../components/ui'
+import { Coverage, HistoryAssessment } from '../components/Assessment'
 import { useReport } from '../App'
-import { adaptBackendCapture, getCapture } from '../lib/api'
+import { adaptBackendCapture, getCapture, retryRun } from '../lib/api'
 import { bytes, datetime, sessionKind, shortHash, titleCase } from '../lib/format'
 
 /**
@@ -28,6 +29,7 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const { report, setReport } = useReport()
   const [error, setError] = useState(null)
+  const [rerunning, setRerunning] = useState(false)
   const [loading, setLoading] = useState(!report)
 
   // Deep links and refreshes have no context, so re-resolve from the route.
@@ -88,6 +90,7 @@ export default function Dashboard() {
 
   return (
     <div>
+      {r.investigation_id && <Link className="text-accent text-sm inline-block mb-4" to={`/investigations/${r.investigation_id}`}>← Investigation & comparisons</Link>}
       {/* -------------------------------------------------- headline */}
       <div className="flex items-start gap-3 justify-between flex-wrap mb-5">
         <div className="min-w-0">
@@ -125,6 +128,16 @@ export default function Dashboard() {
           />
         </div>
       </div>
+
+      <button type="button" className="action mb-1" disabled={rerunning} onClick={async () => {
+        setRerunning(true)
+        try { const run = await retryRun(id); navigate(`/jobs/${run.id}`) }
+        catch (e) { setError(e.message) }
+        finally { setRerunning(false) }
+      }}>{rerunning ? 'Creating run…' : 'Reanalyse as a new run'}</button>
+      <Coverage coverage={r.coverage} />
+      <HistoryAssessment history={r.history} />
+      <details className="mb-5 text-sm"><summary className="cursor-pointer text-ink-2">Analysis provenance</summary><dl className="mt-3 space-y-2">{Object.entries(r.provenance || {}).map(([key, value]) => <div key={key}><dt className="font-medium">{key.replaceAll('_', ' ')}</dt><dd className="font-mono text-xs break-all text-ink-2">{String(value)}</dd></div>)}</dl></details>
 
       {(r.warnings || []).map((w, i) => (
         <Notice key={i} tone="warn" title="Capture note">

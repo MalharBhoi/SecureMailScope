@@ -2,6 +2,8 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import { Link, Route, Routes, useLocation } from 'react-router-dom'
 
 import Upload from './pages/Upload'
+import Investigations from './pages/Investigations'
+import AnalysisJob from './pages/AnalysisJob'
 import Dashboard from './pages/Dashboard'
 import SessionDetail from './pages/SessionDetail'
 import ExportPage from './pages/Export'
@@ -13,7 +15,10 @@ export const useReport = () => useContext(ReportContext)
 
 function useTheme() {
   const [theme, setTheme] = useState(
-    () => localStorage.getItem('sms-theme') || 'system',
+    () => {
+      try { return localStorage.getItem('sms-theme') || 'system' }
+      catch { return 'system' }
+    },
   )
 
   useEffect(() => {
@@ -42,13 +47,13 @@ function Header({ health }) {
 
   return (
     <header className="border-b border-line bg-surface sticky top-0 z-20">
-      <div className="max-w-[1240px] mx-auto px-6 h-14 flex items-center gap-5">
+      <div className="max-w-[1240px] mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3 sm:gap-5">
         <Link to="/" className="flex items-baseline gap-2.5 no-underline text-ink shrink-0">
           <span className="font-display font-semibold text-[17px] tracking-tight">
             SecureMailScope
           </span>
           <span className="font-mono text-[10px] tracking-[0.12em] uppercase text-ink-3 hidden sm:inline">
-            PS 26159
+            SIH 2026 · PS 26159
           </span>
         </Link>
 
@@ -56,9 +61,10 @@ function Header({ health }) {
           <NavLink to="/" active={pathname === '/'}>
             New analysis
           </NavLink>
+          <NavLink to="/investigations" active={pathname.startsWith('/investigations')}>Investigations</NavLink>
         </nav>
 
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-2 sm:gap-3">
           <span
             className="font-mono text-[10px] tracking-[0.08em] uppercase px-2 py-1 rounded bg-surface-2 border border-line text-ink-3"
             title={
@@ -123,6 +129,9 @@ export default function App() {
         <main className="flex-1 max-w-[1240px] w-full mx-auto px-6 py-7">
           <Routes>
             <Route path="/" element={<Upload />} />
+            <Route path="/investigations" element={<Investigations />} />
+            <Route path="/investigations/:investigationId" element={<Investigations />} />
+            <Route path="/jobs/:id" element={<AnalysisJob />} />
             <Route path="/report/:id" element={<Dashboard />} />
             <Route path="/report/:id/sessions/:stream" element={<SessionDetail />} />
             <Route path="/report/:id/export" element={<ExportPage />} />

@@ -245,10 +245,13 @@ def parse_client_hello(body: bytes) -> Optional[ClientHello]:
             if etype == EXT_SERVER_NAME and len(edata) >= 5:
                 # server_name_list -> first entry, type 0 = host_name
                 nlen = struct.unpack("!H", edata[3:5])[0]
-                ch.server_name = edata[5:5 + nlen].decode("idna", "replace") \
-                    if edata[2] == 0 else None
-                if ch.server_name is None:
-                    ch.server_name = edata[5:5 + nlen].decode("utf-8", "replace")
+                if edata[2] == 0 and nlen > 0 and 5 + nlen <= len(edata):
+                    try:
+                        # The IDNA codec supports strict decoding only. An invalid
+                        # hostname must not discard the rest of the ClientHello.
+                        ch.server_name = edata[5:5 + nlen].decode("idna")
+                    except UnicodeError:
+                        pass
             elif etype == EXT_SUPPORTED_GROUPS and len(edata) >= 2:
                 ch.supported_groups = _u16_list(edata[2:])
             elif etype == EXT_EC_POINT_FORMATS and len(edata) >= 1:

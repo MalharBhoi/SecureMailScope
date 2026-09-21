@@ -100,6 +100,20 @@
     Captured {{ r.capture.first_packet_time or 'unknown' }} · Report generated {{ r.generated_at }}
   </div>
 </header>
+{% if r.coverage %}
+<section><h2>Evidence coverage</h2><p>{{ r.coverage.assessed_checks }} / {{ r.coverage.applicable_checks }} applicable checks assessed; {{ r.coverage.limited_sessions }} sessions have visibility limits. Coverage is separate from the grade. Unobservable evidence has not been verified.</p></section>
+{% endif %}
+{% if r.provenance %}
+<details><summary>Analysis provenance</summary><dl>{% for key in r.provenance %}<dt>{{ key }}</dt><dd class="sub">{{ r.provenance[key] }}</dd>{% endfor %}</dl></details>
+{% endif %}
+{% if r.history and r.history.servers %}
+<section><h2>Historical observations</h2><p>Deviations are review prompts, not proof of an attack. Missing findings are not proof of remediation.</p>
+{% for server in r.history.servers %}<div class="card"><b>{{ server.host }}:{{ server.port }}</b> · {{ server.status }}<p>{{ server.prior_sessions }} prior sessions in {{ server.prior_captures }} distinct captures. {{ server.identity_confidence }}</p>
+{% for change in server.changes %}<p>{{ change.field }}: {{ change.previous|join(', ') }} → {{ change.new|join(', ') }}</p>{% endfor %}
+{% for anomaly in server.anomalies %}{% if anomaly.unusual %}<p>Unusual session {{ anomaly.session_id }} · score {{ anomaly.score }}</p>{% endif %}{% endfor %}
+</div>{% endfor %}</section>
+{% endif %}
+
 
 <div class="hero">
   <div class="stamp g-{{ 'Aplus' if r.overall_grade == 'A+' else r.overall_grade }}">{{ r.overall_grade }}</div>
@@ -163,6 +177,7 @@
 <div class="card">
   <h3>Session #{{ s.tcp_stream }} · {{ s.protocol|upper }} over {{ s.tls_mode }}
       <span class="pill s-{{ 'critical' if s.grade.letter in ['F','E'] else 'high' if s.grade.letter in ['D','C'] else 'info' }}">{{ s.grade.letter }}</span></h3>
+  {% if s.coverage %}<p>Coverage: {{ s.coverage.assessed_checks }} / {{ s.coverage.applicable_checks }} applicable checks. Not assessed: {{ s.coverage.skipped_checks|join(', ') or 'none' }}.</p>{% endif %}
   <div class="sub">
     {{ s.client.ip }}:{{ s.client.port }} → {{ s.server.ip }}:{{ s.server.port }}
     · frames {{ s.first_frame }}–{{ s.last_frame }} · {{ s.duration_seconds }}s

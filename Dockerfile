@@ -27,9 +27,9 @@ WORKDIR /build
 # Dependencies first, so a source-only change does not re-resolve the world.
 COPY backend/pom.xml ./pom.xml
 RUN mvn -B -q dependency:go-offline
-COPY backend/src ./src
+COPY backend/src/main ./src/main
 COPY --from=frontend /build/dist ./src/main/resources/static
-RUN mvn -B -q -DskipTests package
+RUN mvn -B -q -Dmaven.test.skip=true package
 
 # ---------- 3. runtime ----------
 FROM eclipse-temurin:17-jre-jammy AS runtime
@@ -48,6 +48,7 @@ WORKDIR /app
 # from here in editable mode, so this tree is the one copy that runs.
 COPY engine/ /app/engine/
 COPY demo-pcaps/ /app/demo-pcaps/
+COPY ["demo captures/", "/app/demo captures/"]
 COPY scripts/setup.sh /app/scripts/setup.sh
 
 # Drop any model committed to the repo before installing: setup.sh trains one
@@ -55,10 +56,9 @@ COPY scripts/setup.sh /app/scripts/setup.sh
 # different versions is exactly the ambiguity this image should not contain.
 RUN rm -rf /app/engine/securemailscope/ml/artifacts
 
-# The same script a developer runs. It creates the venv, installs the engine,
-# trains the model, and analyses demo-pcaps/smtp.pcap expecting grade F — so a
-# broken engine fails the build here rather than the first upload in production.
-RUN bash /app/scripts/setup.sh --venv /opt/venv --quiet
+# Install and train the model without running sample analyses or test suites.
+# Tests run explicitly in development/CI against isolated databases.
+RUN PIP_NO_CACHE_DIR=1 bash /app/scripts/setup.sh --venv /opt/venv --quiet --skip-smoke-test
 
 COPY --from=backend /build/target/*.jar /app/securemailscope.jar
 

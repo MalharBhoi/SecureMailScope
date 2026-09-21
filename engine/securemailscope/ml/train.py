@@ -166,6 +166,7 @@ def train_and_save(
     sessions_per_profile: int = 8,
     tls13_mask_rate: float = 0.30,
     seed: int = 26159,
+    dataset_path: str = None,
 ) -> TrainingReport:
     import joblib
 
@@ -176,8 +177,24 @@ def train_and_save(
         tls13_mask_rate=tls13_mask_rate,
         seed=seed,
     )
+    captured_rows = None
+    if dataset_path:
+        from .captured_dataset import load
+        ds, captured_rows = load(dataset_path)
+        if set(ds.y) != set(CLASSES):
+            raise ValueError("Candidate training requires all four posture classes; extend the capture lab first")
     report = cross_validate(ds)
-    report.tls13_masked_fraction = tls13_mask_rate
+    if captured_rows:
+        from sklearn.metrics import classification_report
+        from ..assessment import digest
+        comparison = classification_report(ds.y, [r['rules_baseline_class'] for r in captured_rows], output_dict=True, zero_division=0)
+        with open(os.path.join(artifact_dir, 'dataset_evaluation.json'), 'w', encoding='utf-8') as fh:
+            json.dump({'dataset_sha256': digest(dataset_path), 'source': 'captured_traffic',
+                       'groups': len(set(ds.groups)), 'rules_only_baseline': comparison,
+                       'note': 'Labels come from lab configuration. Rules baseline maps critical/high/medium-or-low/none to critical/vulnerable/weak/secure; inspect this mapping before comparing.',
+                       'promotion': 'candidate_only; manually review false negatives and unseen-server validation before deployment'}, fh, indent=2)
+        report.notes.append('Features extracted by the real PCAP pipeline; labels supplied by independent lab configuration.')
+    report.tls13_masked_fraction = sum(ds.cert_masked) / len(ds.cert_masked) if captured_rows else tls13_mask_rate
 
     X = np.asarray(ds.X, dtype=float)
     y = np.asarray(ds.y)
@@ -224,15 +241,18 @@ def main() -> None:  # pragma: no cover - CLI helper
 
     ap = argparse.ArgumentParser(description="Train the SecureMailScope posture model")
     ap.add_argument("--artifacts", default=DEFAULT_ARTIFACT_DIR)
+    ap.add_argument("--dataset", help="Captured-session JSONL; writes a candidate to --artifacts, never auto-promotes")
     ap.add_argument("--profiles", type=int, default=260)
     ap.add_argument("--sessions-per-profile", type=int, default=8)
     ap.add_argument("--tls13-mask-rate", type=float, default=0.30)
     ap.add_argument("--seed", type=int, default=26159)
     args = ap.parse_args()
 
+    if args.dataset and os.path.abspath(args.artifacts) == os.path.abspath(DEFAULT_ARTIFACT_DIR):
+        ap.error('For captured training, choose a separate --artifacts candidate directory')
     rep = train_and_save(
         args.artifacts, args.profiles, args.sessions_per_profile,
-        args.tls13_mask_rate, args.seed
+        args.tls13_mask_rate, args.seed, dataset_path=args.dataset
     )
     print(f"samples={rep.n_samples}  groups={rep.n_groups}  folds={rep.cv_folds}")
     print(f"macro-F1 {rep.macro_f1_mean:.4f} +/- {rep.macro_f1_std:.4f}   "

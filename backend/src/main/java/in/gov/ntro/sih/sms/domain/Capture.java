@@ -20,7 +20,7 @@ import java.util.List;
 })
 public class Capture {
 
-    public enum Status { PENDING, RUNNING, COMPLETED, FAILED }
+    public enum Status { PENDING, RUNNING, COMPLETED, FAILED, CANCELLED }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -86,6 +86,19 @@ public class Capture {
 
     @OneToMany(mappedBy = "capture", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Asset> assets = new ArrayList<>();
+
+    private Long investigationId;
+    private Long sourceCaptureId;
+    @Column(length=64) private String stage = "QUEUED";
+    private Instant startedAt;
+    public Long getInvestigationId() { return investigationId; }
+    public void setInvestigationId(Long value) { investigationId = value; }
+    public Long getSourceCaptureId() { return sourceCaptureId; }
+    public void setSourceCaptureId(Long value) { sourceCaptureId = value; }
+    public String getStage() { return stage; }
+    public void setStage(String value) { stage = value; }
+    public Instant getStartedAt() { return startedAt; }
+    public void setStartedAt(Instant value) { startedAt = value; }
 
     // ---- accessors -------------------------------------------------------
 

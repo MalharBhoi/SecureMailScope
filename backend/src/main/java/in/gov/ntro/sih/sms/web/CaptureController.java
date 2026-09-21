@@ -49,11 +49,13 @@ public class CaptureController {
     private final AssetRepository assets;
     private final FindingRepository findings;
     private final EngineClient engine;
+    private final in.gov.ntro.sih.sms.service.JobState jobs;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public CaptureController(AnalysisService analysis, CaptureRepository captures,
                              MailSessionRepository sessions, AssetRepository assets,
-                             FindingRepository findings, EngineClient engine) {
+                             FindingRepository findings, EngineClient engine, in.gov.ntro.sih.sms.service.JobState jobs) {
+        this.jobs = jobs;
         this.analysis = analysis;
         this.captures = captures;
         this.sessions = sessions;
@@ -94,9 +96,8 @@ public class CaptureController {
     // ---------------------------------------------------------------- upload
 
     @PostMapping(value = "/captures", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<Map<String, Object>> upload(@RequestPart("file") MultipartFile file) {
-        Capture capture = analysis.accept(file);
-        analysis.analyseAsync(capture.getId());
+    public ResponseEntity<Map<String, Object>> upload(@RequestPart("file") MultipartFile file, @RequestParam(required=false) Long investigationId) {
+        Capture capture = analysis.accept(file, investigationId);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(Map.of(
                 "id", capture.getId(),
                 "filename", capture.getFilename(),
@@ -133,10 +134,10 @@ public class CaptureController {
      * rather than a parallel one that can drift away from it.
      */
     @PostMapping("/captures/demo/{name}")
-    public ResponseEntity<Map<String, Object>> analyseDemo(@PathVariable String name) {
-        Capture capture = analysis.acceptDemo(name);
-        capture = analysis.analyse(capture.getId());
-        return ResponseEntity.ok(summary(capture));
+    public ResponseEntity<Map<String, Object>> analyseDemo(@PathVariable String name, @RequestParam(defaultValue="true") boolean sync, @RequestParam(required=false) Long investigationId) {
+        Capture capture = analysis.acceptDemo(name, investigationId);
+        if (sync) capture = analysis.analyse(capture.getId());
+        return ResponseEntity.status(sync ? HttpStatus.OK : HttpStatus.ACCEPTED).body(summary(capture));
     }
 
     // ------------------------------------------------------------------ read
@@ -162,6 +163,12 @@ public class CaptureController {
                 .stream().map(CaptureController::sessionSummary).toList());
         out.put("remediation", remediation(c));
         out.put("warnings", warnings(c));
+        JsonNode raw = parse(c);
+        if (raw != null) {
+            out.put("report", raw);
+            out.put("coverage", raw.path("coverage")); out.put("provenance", raw.path("provenance"));
+            out.put("history", raw.path("history"));
+        }
         return out;
     }
 
@@ -184,6 +191,7 @@ public class CaptureController {
                 .stream().map(CaptureController::findingView).toList());
         // The engine document holds the parts too detailed for the schema:
         // the transcript, the SHAP contributions and the full certificate chain.
+        if (!s.getCapture().getId().equals(captureId)) throw new IllegalArgumentException("Session does not belong to this capture");
         JsonNode raw = engineSession(require(captureId), s.getStreamIndex());
         if (raw != null) {
             out.put("transcript", raw.path("command_transcript"));
@@ -192,6 +200,7 @@ public class CaptureController {
             out.put("capabilityLine", raw.path("capability_line").asText(null));
             out.put("mangledToken", raw.path("mangled_token").asText(null));
             out.put("notes", raw.path("notes"));
+            out.put("coverage", raw.path("coverage"));
         }
         return out;
     }
@@ -249,10 +258,19 @@ public class CaptureController {
         return c.getReportJson();
     }
 
+    @PostMapping("/captures/{id}/cancel")
+    public Map<String, Object> cancel(@PathVariable Long id) { return summary(jobs.cancel(id)); }
+
+    @PostMapping("/captures/{id}/retry")
+    public Map<String, Object> retry(@PathVariable Long id) { return summary(jobs.retry(id)); }
+
     @DeleteMapping("/captures/{id}")
     @Transactional
     public ResponseEntity<Void> delete(@PathVariable Long id) {
-        captures.delete(require(id));
+        Capture c = require(id);
+        if (c.getStatus() == Capture.Status.RUNNING || c.getStatus() == Capture.Status.PENDING)
+            throw new IllegalArgumentException("Cancel the active run before deleting it");
+        captures.delete(c);
         return ResponseEntity.noContent().build();
     }
 
@@ -263,9 +281,13 @@ public class CaptureController {
                 .orElseThrow(() -> new IllegalArgumentException("no capture " + id));
     }
 
-    private static Map<String, Object> summary(Capture c) {
+    public static Map<String, Object> summary(Capture c) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", c.getId());
+        m.put("investigationId", c.getInvestigationId());
+        m.put("sourceCaptureId", c.getSourceCaptureId());
+        m.put("stage", c.getStage());
+        m.put("startedAt", c.getStartedAt());
         m.put("filename", c.getFilename());
         m.put("sha256", c.getSha256());
         m.put("sizeBytes", c.getSizeBytes());

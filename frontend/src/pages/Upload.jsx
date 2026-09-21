@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { Card, GradeBadge, Label, Notice, Spinner } from '../components/ui'
 import { useReport } from '../App'
@@ -8,6 +8,7 @@ import {
   analyseDemoCapture,
   getCapture,
   listDemoCaptures,
+  listInvestigations,
   uploadCapture,
 } from '../lib/api'
 
@@ -24,6 +25,10 @@ import {
 
 export default function Upload() {
   const navigate = useNavigate()
+  const [search] = useSearchParams()
+  const [investigations, setInvestigations] = useState([])
+  const [investigationId, setInvestigationId] = useState(search.get('investigation') || '')
+  useEffect(() => { listInvestigations().then(setInvestigations).catch(() => {}) }, [])
   const { setReport, health } = useReport()
   const [dragging, setDragging] = useState(false)
   const [busy, setBusy] = useState(null)
@@ -48,18 +53,9 @@ export default function Upload() {
     }
   }, [health?.reachable])
 
-  const show = useCallback(
-    async (created) => {
-      const detail = await getCapture(created.id)
-      if (detail.status === 'FAILED') {
-        setError(detail.errorMessage || 'The engine could not analyse that capture.')
-        return
-      }
-      setReport({ report: adaptBackendCapture(detail), id: detail.id })
-      navigate(`/report/${detail.id}`)
-    },
-    [navigate, setReport],
-  )
+  const show = useCallback(async (created) => {
+    navigate(`/jobs/${created.id}`)
+  }, [navigate])
 
   const handleFile = useCallback(
     async (file) => {
@@ -67,14 +63,14 @@ export default function Upload() {
       setError(null)
       setBusy(`Analysing ${file.name}…`)
       try {
-        await show(await uploadCapture(file, { sync: true }))
+        await show(await uploadCapture(file, { investigationId }))
       } catch (e) {
         setError(e.message)
       } finally {
         setBusy(null)
       }
     },
-    [show],
+    [show, investigationId],
   )
 
   const runDemo = useCallback(
@@ -82,27 +78,26 @@ export default function Upload() {
       setError(null)
       setBusy(`Analysing ${name}…`)
       try {
-        await show(await analyseDemoCapture(name))
+        await show(await analyseDemoCapture(name, investigationId))
       } catch (e) {
         setError(e.message)
       } finally {
         setBusy(null)
       }
     },
-    [show],
+    [show, investigationId],
   )
 
   return (
     <div className="max-w-[900px] mx-auto">
       <div className="mb-7">
-        <Label className="text-accent mb-2.5">New analysis</Label>
+        <Label className="text-accent mb-2.5">Email security assessment</Label>
         <h1 className="font-display text-[30px] leading-tight font-semibold tracking-tight m-0">
-          Give it a capture. Get back a grade, the evidence, and a fix list.
+          Analyse a network capture
         </h1>
         <p className="text-ink-2 mt-2.5 max-w-[62ch] leading-relaxed">
-          SecureMailScope reads a recorded network file, finds every SMTP, IMAP and POP3
-          conversation inside it, and judges how well each one was encrypted. Nothing is
-          sent anywhere — the analysis happens entirely on this machine.
+          Review encryption, certificates and STARTTLS use in recorded email traffic.
+          Upload a capture to see security grades, supporting evidence and recommended fixes.
         </p>
       </div>
 
@@ -121,20 +116,26 @@ export default function Upload() {
         </Notice>
       )}
 
+      <label className="block text-sm mb-4 mt-4">
+        Investigation <span className="text-ink-3">(groups captures for history and comparison)</span>
+        <select className="field mt-2" value={investigationId} onChange={e => setInvestigationId(e.target.value)} disabled={!!busy}>
+          <option value="">Standalone analysis</option>
+          {investigations.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+        </select>
+      </label>
       {/* -------------------------------------------------- drop zone */}
       <Card
-        className={`p-10 text-center transition-colors mt-4 ${
-          dragging ? 'border-accent bg-accent-soft' : 'border-dashed border-line-2'
-        } ${ready ? '' : 'opacity-60'}`}
+        className={`capture-dropzone p-6 sm:p-10 text-center transition-colors mt-4 ${dragging ? 'is-dragging' : ''}`}
+        aria-busy={!!busy}
         onDragOver={(e) => {
           e.preventDefault()
-          if (ready) setDragging(true)
+          if (ready && !busy) setDragging(true)
         }}
         onDragLeave={() => setDragging(false)}
         onDrop={(e) => {
           e.preventDefault()
           setDragging(false)
-          if (ready) handleFile(e.dataTransfer.files?.[0])
+          if (ready && !busy) handleFile(e.dataTransfer.files?.[0])
         }}
       >
         <input
@@ -150,24 +151,23 @@ export default function Upload() {
           </div>
         ) : (
           <>
-            <div className="font-display text-lg font-semibold mb-1.5">
-              Drop a .pcap or .pcapng file here
-            </div>
-            <div className="text-ink-2 text-sm mb-5">
-              or{' '}
-              <button
-                type="button"
-                disabled={!ready}
-                onClick={() => inputRef.current?.click()}
-                className="text-accent underline underline-offset-2 disabled:no-underline disabled:text-ink-3"
-              >
-                choose a file
-              </button>
-              {' · '}up to 2 GB{' · '}.gz archives are read directly
-            </div>
+            <svg aria-hidden="true" className="mx-auto mb-4 text-accent" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 16V3m-5 5 5-5 5 5M4 15v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5" />
+            </svg>
+            <h2 className="font-display text-[23px] sm:text-[28px] leading-relaxed font-semibold mb-2">
+              Drop a <span className="capture-format">.pcap</span> or <span className="capture-format">.pcapng</span> file here
+            </h2>
+            <p className="text-ink-2 text-sm mb-5">Up to 2 GB · .cap and .gz files also supported</p>
+            <button
+              type="button"
+              disabled={!ready}
+              onClick={() => inputRef.current?.click()}
+              className="capture-choose mb-5"
+            >
+              Choose a file
+            </button>
             <div className="font-mono text-[11px] text-ink-3">
-              A SHA-256 hash is taken the moment the file arrives, so the findings can be
-              tied back to this exact piece of evidence.
+              Each report includes the capture’s SHA-256 hash for evidence tracking.
             </div>
           </>
         )}
@@ -182,11 +182,10 @@ export default function Upload() {
       {/* -------------------------------------------------- bundled captures */}
       {demos.length > 0 && (
         <div className="mt-8">
-          <Label className="mb-1.5">Or analyse a bundled capture</Label>
+          <Label className="mb-1.5">Sample captures</Label>
           <p className="text-[13.5px] text-ink-2 mb-3 max-w-[70ch] leading-relaxed">
-            Five captures, worst first, so the whole scale is visible in one sitting. The
-            grade shown is the one each earns — a tool that only ever returns failures gives
-            you no way to tell a strict grader from a broken one.
+            Choose a sample to try the workflow. Each includes a known security issue or a
+            correctly encrypted session; the expected grade is shown alongside it.
           </p>
           <div className="grid gap-2.5">
             {demos.map((d) => (
@@ -211,8 +210,7 @@ export default function Upload() {
             ))}
           </div>
           <p className="text-[12.5px] text-ink-3 mt-3 leading-relaxed">
-            These run through the same upload, hash, engine and storage path as a file you
-            drop above — a demo of the product, not a recording of one.
+            Samples are processed by the same analysis engine as your uploaded captures.
           </p>
         </div>
       )}

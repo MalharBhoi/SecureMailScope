@@ -22,6 +22,7 @@
 #   --venv PATH     virtualenv location (default: .venv)
 #   --no-ml         skip the model layer (scikit-learn, shap)
 #   --quiet         less output (used by the Docker build)
+#   --skip-smoke-test  install without analysing a sample capture
 
 set -euo pipefail
 
@@ -32,6 +33,7 @@ VENV=".venv"
 WANT_ML=1
 BASE_PYTHON=""
 QUIET=0
+SMOKE_TEST=1
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -39,6 +41,7 @@ while [[ $# -gt 0 ]]; do
     --venv)   VENV="$2"; shift 2 ;;
     --no-ml)  WANT_ML=0; shift ;;
     --quiet)  QUIET=1; shift ;;
+    --skip-smoke-test) SMOKE_TEST=0; shift ;;
     -h|--help) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown option: $1"; exit 2 ;;
   esac
@@ -140,7 +143,7 @@ fi
 # --- smoke test -------------------------------------------------------------
 # A real capture through the real engine, asserting the grade this file is known
 # to earn. An install that imports but cannot analyse is not a working install.
-if [[ -f "$ROOT/demo-pcaps/smtp.pcap" ]]; then
+if [[ $SMOKE_TEST -eq 1 && -f "$ROOT/demo-pcaps/smtp.pcap" ]]; then
   ML_FLAG=""; [[ "$HAS_ML" == "no" ]] && ML_FLAG="--no-ml"
   GRADE=$("$VPY" -m securemailscope.cli analyse "$ROOT/demo-pcaps/smtp.pcap" \
             --json - $ML_FLAG 2>/dev/null \

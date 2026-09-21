@@ -51,8 +51,8 @@ export async function listDemoCaptures() {
 }
 
 /** Analyse a bundled capture — the same pipeline an upload takes. */
-export async function analyseDemoCapture(name) {
-  return json(await fetch(`/api/captures/demo/${encodeURIComponent(name)}`, {
+export async function analyseDemoCapture(name, investigationId) {
+  return json(await fetch(`/api/captures/demo/${encodeURIComponent(name)}?sync=false${investigationId ? `&investigationId=${investigationId}` : ""}`, {
     method: 'POST',
   }))
 }
@@ -69,10 +69,10 @@ export async function getSession(captureId, sessionId) {
   return json(await fetch(`/api/captures/${captureId}/sessions/${sessionId}`))
 }
 
-export async function uploadCapture(file, { sync = false } = {}) {
+export async function uploadCapture(file, { sync = false, investigationId } = {}) {
   const form = new FormData()
   form.append('file', file)
-  const res = await fetch(`/api/captures${sync ? '/sync' : ''}`, {
+  const res = await fetch(`/api/captures${sync ? '/sync' : ''}${investigationId ? `?investigationId=${investigationId}` : ''}`, {
     method: 'POST',
     body: form,
   })
@@ -111,7 +111,13 @@ export function reportPrintUrl(id) {
  * live backend response is mapped onto it here — one adapter, in one place.
  */
 export function adaptBackendCapture(detail) {
+  if (detail.report) return { ...detail.report, investigation_id: detail.investigationId,
+    sessions: detail.report.sessions.map(s => ({ ...s, backendId: detail.sessions?.find(row => row.stream === s.tcp_stream)?.id })) }
   return {
+    investigation_id: detail.investigationId,
+    coverage: detail.coverage,
+    provenance: detail.provenance,
+    history: detail.history,
     capture: {
       filename: detail.filename,
       sha256: detail.sha256,
@@ -216,3 +222,15 @@ export function adaptBackendSession(s) {
     notes: s.notes || [],
   }
 }
+
+export const listInvestigations = async () => json(await fetch('/api/investigations'))
+export const getInvestigation = async id => json(await fetch(`/api/investigations/${id}`))
+export const createInvestigation = async name => json(await fetch('/api/investigations', {
+  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }),
+}))
+export const cancelRun = async id => json(await fetch(`/api/captures/${id}/cancel`, { method: 'POST' }))
+export const retryRun = async id => json(await fetch(`/api/captures/${id}/retry`, { method: 'POST' }))
+export const compareRuns = async (id, before, after) => json(await fetch(`/api/investigations/${id}/compare?before=${before}&after=${after}`))
+export const saveRemediation = async (id, key, status, note = '') => json(await fetch(`/api/investigations/${id}/remediation`, {
+  method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, status, note }),
+}))

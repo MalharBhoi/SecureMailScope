@@ -26,7 +26,6 @@ import java.util.Locale;
 import java.util.StringJoiner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -46,12 +45,27 @@ public class AnalysisService {
     private final CaptureRepository captures;
     private final EngineClient engine;
     private final EngineProperties properties;
+    private final JobState jobs;
+    private final org.springframework.transaction.support.TransactionTemplate transactions;
 
     public AnalysisService(CaptureRepository captures, EngineClient engine,
-                           EngineProperties properties) {
+                           EngineProperties properties, JobState jobs, org.springframework.transaction.PlatformTransactionManager manager) {
+        this.jobs = jobs;
+        this.transactions = new org.springframework.transaction.support.TransactionTemplate(manager);
         this.captures = captures;
         this.engine = engine;
         this.properties = properties;
+    }
+
+    @Transactional
+    public Capture accept(MultipartFile file, Long investigationId) {
+        Capture c = accept(file);
+        return jobs.assign(c.getId(), investigationId);
+    }
+    @Transactional
+    public Capture acceptDemo(String name, Long investigationId) {
+        Capture c = acceptDemo(name);
+        return jobs.assign(c.getId(), investigationId);
     }
 
     public static class UploadRejected extends RuntimeException {
@@ -134,13 +148,21 @@ public class AnalysisService {
         String digest;
         try {
             Files.createDirectories(dir);
-            Path target = dir.resolve(System.currentTimeMillis() + "-" + original);
+            Path target = dir.resolve(java.util.UUID.randomUUID() + "-" + original);
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             try (DigestInputStream dis = new DigestInputStream(in, md)) {
                 Files.copy(dis, target, StandardCopyOption.REPLACE_EXISTING);
             }
             digest = HexFormat.of().formatHex(md.digest());
             stored = target.toAbsolutePath().toString();
+            if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+                org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override public void afterCompletion(int status) {
+                            if (status != STATUS_COMMITTED) try { Files.deleteIfExists(target); } catch (IOException e) { log.warn("Could not remove rolled-back upload {}", target); }
+                        }
+                    });
+            }
         } catch (IOException e) {
             throw new UploadRejected("could not store the capture: " + e.getMessage());
         } catch (NoSuchAlgorithmException e) {
@@ -216,40 +238,47 @@ public class AnalysisService {
                 .toList();
     }
 
-    @Async("analysisExecutor")
-    public void analyseAsync(Long captureId) {
+    public synchronized Capture analyse(Long captureId) {
+        Capture capture = jobs.claim(captureId);
+        if (capture == null) return captures.findById(captureId).orElseThrow();
+        JsonNode output = null;
+        String failure = null;
+        Path historyFile = null;
         try {
-            analyse(captureId);
+            String path = capture.getStoragePath();
+            if (path == null || !Files.exists(Path.of(path))) throw new IllegalStateException("Uploaded evidence is no longer on disk");
+            var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            var prior = mapper.createArrayNode();
+            if (capture.getInvestigationId() != null) {
+                for (Capture old : captures.findByInvestigationIdOrderByIdDesc(capture.getInvestigationId())) {
+                    if (!old.getId().equals(captureId) && old.getStatus() == Capture.Status.COMPLETED && old.getReportJson() != null)
+                        prior.add(mapper.readTree(old.getReportJson()));
+                }
+            }
+            historyFile = Files.createTempFile("sms-history-", ".json");
+            Files.writeString(historyFile, prior.toString());
+            output = engine.analyse(Path.of(path), historyFile, stage -> jobs.progress(captureId, stage), () -> jobs.cancelled(captureId));
+            ((com.fasterxml.jackson.databind.node.ObjectNode) output.path("capture")).put("filename", capture.getFilename());
+            if (!capture.getSha256().equals(output.path("capture").path("sha256").asText()))
+                throw new IllegalStateException("Evidence hash changed since upload; analysis rejected");
         } catch (Exception e) {
-            log.error("analysis failed for capture {}", captureId, e);
+            failure = trim(e.getMessage(), 3900);
+        } finally {
+            if (historyFile != null) try { Files.deleteIfExists(historyFile); } catch (IOException ignored) { }
         }
-    }
-
-    @Transactional
-    public Capture analyse(Long captureId) {
-        Capture capture = captures.findById(captureId)
-                .orElseThrow(() -> new IllegalArgumentException("no capture " + captureId));
-        String path = capture.getStoragePath();
-        if (path == null || !Files.exists(Path.of(path))) {
-            capture.setStatus(Capture.Status.FAILED);
-            capture.setErrorMessage("the uploaded file is no longer on disk");
-            return captures.save(capture);
-        }
-
-        capture.setStatus(Capture.Status.RUNNING);
-        captures.saveAndFlush(capture);
-
-        try {
-            JsonNode report = engine.analyse(Path.of(path));
-            apply(capture, report);
-            capture.setStatus(Capture.Status.COMPLETED);
-            capture.setAnalysedAt(Instant.now());
-        } catch (Exception e) {
-            log.warn("engine failed for capture {}: {}", captureId, e.getMessage());
-            capture.setStatus(Capture.Status.FAILED);
-            capture.setErrorMessage(trim(e.getMessage(), 3900));
-        }
-        return captures.save(capture);
+        final JsonNode report = output;
+        final String error = failure;
+        return transactions.execute(tx -> {
+            Capture c = captures.lockById(captureId).orElseThrow();
+            if (c.getStatus() == Capture.Status.CANCELLED) return c;
+            if (error != null || report == null) {
+                c.setStatus(Capture.Status.FAILED); c.setStage("FAILED"); c.setErrorMessage(error);
+            } else {
+                apply(c, report); c.setStatus(Capture.Status.COMPLETED); c.setStage("COMPLETED");
+                c.setAnalysedAt(Instant.now());
+            }
+            return captures.save(c);
+        });
     }
 
     // ------------------------------------------------------------------
